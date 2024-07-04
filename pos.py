@@ -14,6 +14,7 @@ from pandasai import Agent
 from io import BytesIO
 import base64
 import threading
+from fastapi.responses import FileResponse
 
 app = FastAPI()
 DATABASE = 'coffee_shop.db'
