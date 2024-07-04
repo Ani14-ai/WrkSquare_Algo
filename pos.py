@@ -162,9 +162,8 @@ def get_analytics(store_id: int, prompt: str = Query(...)):
         lake = SmartDatalake([df_merged], config={"llm": llm})
         response = lake.chat(prompt + "All prices should be in AED")
         graph_path = "/home/waysahead/sites/WrkSquare_Algo/exports/charts/temp_chart.png"
-        header=response
         if os.path.exists(graph_path):
-            return FileResponse(graph_path, media_type="image/png",headers=header)
+            return FileResponse(graph_path, media_type="image/png")
         else:
              raise HTTPException(status_code=500, detail="Graph file not found")
     except Exception as e:
