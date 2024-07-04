@@ -155,28 +155,11 @@ def get_analytics(store_id: int, prompt: str = Query(...)):
         
         # Merge DataFrames
         df_merged = pd.merge(df_transaction_details, df_products, on='product_id')
-        df_merged = pd.merge(df_merged, df_transactions, on='transaction_id')
-        
-        # Plot default progress graph
-        forecast_amount = get_forecast_amount()
-        df_merged['cumulative_total'] = df_merged['total_amount'].cumsum()
-        plt.figure(figsize=(10, 6))
-        sns.lineplot(x=df_merged['timestamp'], y=df_merged['cumulative_total'])
-        plt.axhline(y=forecast_amount, color='r', linestyle='--')
-        plt.xlabel('Time')
-        plt.ylabel('Cumulative Sales')
-        plt.title('Progress Towards Forecast Amount')
-        buffer = BytesIO()
-        plt.savefig(buffer, format='png')
-        buffer.seek(0)
-        img_str = base64.b64encode(buffer.read()).decode('utf-8')
-        
+        df_merged = pd.merge(df_merged, df_transactions, on='transaction_id')        
         # Use OpenAI API to interpret the prompt and generate response
         lake = SmartDatalake([df_merged], config={"llm": llm})
-        response = lake.chat(prompt)
-        
+        response = lake.chat(prompt)        
         return {
-            "default_graph": img_str,
             "result": response
         }
     except Exception as e:
