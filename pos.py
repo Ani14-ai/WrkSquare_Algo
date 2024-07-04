@@ -158,6 +158,7 @@ def get_analytics(store_id: int, prompt: str = Query(...)):
         df_merged = pd.merge(df_merged, df_transactions, on='transaction_id')        
         # Use OpenAI API to interpret the prompt and generate response
         lake = SmartDatalake([df_merged], config={"llm": llm})
+        lake.tain(docs="All the prices should be in AED")
         response = lake.chat(prompt)        
         return {
             "result": response
