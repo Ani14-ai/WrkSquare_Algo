@@ -159,10 +159,12 @@ def get_analytics(store_id: int, prompt: str = Query(...)):
         df_merged = pd.merge(df_merged, df_transactions, on='transaction_id')        
         # Use OpenAI API to interpret the prompt and generate response
         lake = SmartDatalake([df_merged], config={"llm": llm})
-        response = lake.chat(prompt + "All prices should be in AED")        
-        return {
-            "result": response
-        }
+        response = lake.chat(prompt + "All prices should be in AED")
+        graph_path = "/home/waysahead/sites/WrkSquare_Algo/exports/charts/temp_chart.png"
+        if os.path.exists(graph_path):
+            return FileResponse(graph_path, media_type="image/png")
+        else:
+             raise HTTPException(status_code=500, detail="Graph file not found")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
