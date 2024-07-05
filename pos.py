@@ -163,8 +163,11 @@ def get_analytics(store_id: int, prompt: str = Query(...)):
         lake = SmartDatalake([df_merged], config={"llm": llm})
         response = lake.chat(prompt + "All prices should be in AED")
         graph_path = "/home/waysahead/sites/WrkSquare_Algo/exports/charts/temp_chart.png"
+        if all(ord(char) < 128 for char in response):
+            headers = {"AI-response": response}
+        else:
+            headers = {}
         if os.path.exists(graph_path):
-            headers = {"AI-Response": response}
             return FileResponse(graph_path, media_type="image/png", headers=headers)
         else:
             return JSONResponse(content={"AI-response": response})
