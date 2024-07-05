@@ -37,6 +37,10 @@ class TransactionDetail(BaseModel):
     quantity: int
     price: float
 
+class PromptRequest(BaseModel):
+    prompt: str
+
+
 def get_forecast_amount():
     return 1000  # Example forecast amount in AED
 
@@ -198,7 +202,7 @@ def get_analytics(
         df_merged = pd.merge(df_transaction_details, df_products, on='product_id')
         df_merged = pd.merge(df_merged, df_transactions, on='transaction_id')        
         lake = SmartDatalake([df_merged], config={"llm": llm})
-        response = lake.chat(prompt + "All prices should be in AED")
+        response = lake.chat(prompt_request.prompt + "All prices should be in AED")
         graph_path = "/home/waysahead/sites/WrkSquare_Algo/exports/charts/temp_chart.png"
         if all(ord(char) < 128 for char in response):
             headers = {"AI-response": response}
