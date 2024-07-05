@@ -1,4 +1,4 @@
-from fastapi import FastAPI, BackgroundTasks, HTTPException, Form, Response, Query
+from fastapi import FastAPI, BackgroundTasks, HTTPException, Form, Response, Query , Body
 from pydantic import BaseModel
 import sqlite3
 import random
@@ -14,6 +14,7 @@ from pandasai import Agent
 from io import BytesIO
 import base64
 import threading
+from typing import Annotated
 from fastapi.responses import FileResponse, JSONResponse
 
 app = FastAPI()
@@ -53,7 +54,7 @@ def create_connection(db_file):
 transaction_simulation_tasks = {}  # To keep track of ongoing transaction simulations
 db_lock = threading.Lock()
 
-@app.post("/store/open")
+@app.post("/e6a9fbd7-f487-4a47-bfa4-1d207b4d5686", summary="Open Store")
 def open_store(background_tasks: BackgroundTasks, store_id: int = Form(...)):
     try:
         forecast_amount = get_forecast_amount()
@@ -119,7 +120,7 @@ def start_transaction_simulation(store_id: int):
             simulate_transaction(store_id)
         time.sleep(random.uniform(5, 10))  # Reduce transaction frequency
         
-@app.get("/transactions/realtime")
+@app.get("/f91e0ab8-4a7e-4e6f-95c2-f3f67c5a62c8", summary="Realtime Transactions")
 def get_realtime_transactions(store_id: int):
     try:
         connection = create_connection(DATABASE)
@@ -134,8 +135,45 @@ def get_realtime_transactions(store_id: int):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
         
-@app.get("/analytics")
-def get_analytics(store_id: int, prompt: str = Query(...)):
+@app.post("/d3b8f374-89b5-4db5-8d98-1c29e2a1e9e5", summary="Augmented Analytics")
+def get_analytics(
+    store_id: int,
+    prompt_request: Annotated[
+        PromptRequest,
+        Body(
+            openapi_examples={
+                "line_plot": {
+                    "summary": "Line Plot",
+                    "description": "Show a line plot of daily sales trends with time on the x-axis and total sales on the y-axis. Use vibrant colors and add a legend.",
+                    "value": {
+                        "prompt": "Show a line plot of daily sales trends with time on the x-axis and total sales on the y-axis. Use vibrant colors and add a legend."
+                    },
+                },
+                "pie_chart": {
+                    "summary": "Pie Chart",
+                    "description": "Create a pie chart showing the distribution of sales among different product categories. Use a variety of colors for each category.",
+                    "value": {
+                        "prompt": "Create a pie chart showing the distribution of sales among different product categories. Use a variety of colors for each category."
+                    },
+                },
+                "heatmap": {
+                    "summary": "Heatmap",
+                    "description": "Generate a heatmap to show the sales amount for each product over time. Use a gradient color scheme to represent sales volume.",
+                    "value": {
+                        "prompt": "Generate a heatmap to show the sales amount for each product over time. Use a gradient color scheme to represent sales volume."
+                    },
+                },
+                "bar_chart": {
+                    "summary": "Bar Chart",
+                    "description": "Display a bar chart of the top 5 selling products with product names on the x-axis and sales amount on the y-axis. Use different colors for each bar.",
+                    "value": {
+                        "prompt": "Display a bar chart of the top 5 selling products with product names on the x-axis and sales amount on the y-axis. Use different colors for each bar."
+                    },
+                },
+            },
+        ),
+    ]
+):
     try:
         connection = create_connection(DATABASE)
         cursor = connection.cursor()
@@ -173,7 +211,7 @@ def get_analytics(store_id: int, prompt: str = Query(...)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
         
-@app.post("/store/close")
+@app.post("/a9174a9f-3e16-47a4-9bce-8c4e04c6895b", summary="Close Store")
 def close_store(background_tasks: BackgroundTasks, store_id: int = Form(...)):
     try:
         global transaction_simulation_tasks
