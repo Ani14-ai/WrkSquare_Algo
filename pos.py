@@ -14,7 +14,7 @@ from pandasai import Agent
 from io import BytesIO
 import base64
 import threading
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 
 app = FastAPI()
 DATABASE = 'coffee_shop.db'
@@ -118,13 +118,14 @@ def start_transaction_simulation(store_id: int):
         with db_lock:
             simulate_transaction(store_id)
         time.sleep(random.uniform(5, 10))  # Reduce transaction frequency
-
+        
 @app.get("/transactions/realtime")
 def get_realtime_transactions(store_id: int):
     try:
         connection = create_connection(DATABASE)
         cursor = connection.cursor()
-        cursor.execute("SELECT * FROM Transactions WHERE store_id = ?", (store_id,))
+        current_date = datetime.datetime.now().strftime("%Y-%m-%d")
+        cursor.execute("SELECT * FROM Transactions WHERE store_id = ? AND DATE(timestamp) = ?", (store_id, current_date))
         transactions = cursor.fetchall()
         
         connection.close()
@@ -132,7 +133,7 @@ def get_realtime_transactions(store_id: int):
         return [{"transaction_id": transaction[0], "store_id": transaction[1], "total_amount": transaction[2], "timestamp": transaction[3]} for transaction in transactions]
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
+        
 @app.get("/analytics")
 def get_analytics(store_id: int, prompt: str = Query(...)):
     try:
@@ -162,14 +163,14 @@ def get_analytics(store_id: int, prompt: str = Query(...)):
         lake = SmartDatalake([df_merged], config={"llm": llm})
         response = lake.chat(prompt + "All prices should be in AED")
         graph_path = "/home/waysahead/sites/WrkSquare_Algo/exports/charts/temp_chart.png"
-        headers = {"X-Response-Header": response}
         if os.path.exists(graph_path):
-            return FileResponse(graph_path, media_type="image/png",headers=headers)
+            headers = {"AI-Response": response}
+            return FileResponse(graph_path, media_type="image/png", headers=headers)
         else:
-             raise HTTPException(status_code=500, detail="Graph file not found")
+            return JSONResponse(content={"AI-response": response})
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
+        
 @app.post("/store/close")
 def close_store(background_tasks: BackgroundTasks, store_id: int = Form(...)):
     try:
