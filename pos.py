@@ -42,10 +42,10 @@ class PromptRequest(BaseModel):
 
 
 def get_forecast_amount():
-    return 1000  # Example forecast amount in AED
+    return 1000 
 
 def get_cash_register_amount():
-    return round(random.uniform(50, 200), 2)  # Example initial cash amount
+    return round(random.uniform(50, 200), 2)  
 
 def create_connection(db_file):
     try:
@@ -55,7 +55,7 @@ def create_connection(db_file):
         print(e)
     return None
 
-transaction_simulation_tasks = {}  # To keep track of ongoing transaction simulations
+transaction_simulation_tasks = {}  
 db_lock = threading.Lock()
 
 @app.post("/e6a9fbd7-f487-4a47-bfa4-1d207b4d5686", summary="Open Store")
@@ -70,10 +70,10 @@ def open_store(background_tasks: BackgroundTasks, store_id: int = Form(...)):
         cursor.execute("INSERT OR REPLACE INTO Forecasts (store_id, forecast_amount) VALUES (?, ?)", (store_id, forecast_amount))
         cursor.execute("INSERT OR REPLACE INTO CashRegister (store_id, cash_amount) VALUES (?, ?)", (store_id, cash_amount))
         
-        cursor.execute("SELECT * FROM Products")
+        cursor.execute("SELECT * FROM Products WHERE store_id = ?", (store_id,))
         products = cursor.fetchall()
         
-        product_menu = [{"product_id": product[0], "name": product[1], "category": product[2], "price": product[3]} for product in products]
+        product_menu = [{"product_id": product[0], "name": product[2], "category": product[3], "price": product[4]} for product in products]
         
         connection.commit()
         connection.close()
@@ -122,7 +122,7 @@ def start_transaction_simulation(store_id: int):
     while store_id in transaction_simulation_tasks:
         with db_lock:
             simulate_transaction(store_id)
-        time.sleep(random.uniform(5, 10))  # Reduce transaction frequency
+        time.sleep(random.uniform(30,60)) 
         
 @app.get("/f91e0ab8-4a7e-4e6f-95c2-f3f67c5a62c8", summary="Realtime Transactions")
 def get_realtime_transactions(store_id: int):
@@ -193,10 +193,10 @@ def get_analytics(
         
         df_transaction_details = pd.DataFrame(transaction_details, columns=['transaction_detail_id', 'transaction_id', 'product_id', 'quantity', 'price'])
         
-        cursor.execute("SELECT * FROM Products")
+        cursor.execute("SELECT * FROM Products WHERE store_id = ?", (store_id,))
         products = cursor.fetchall()
         
-        df_products = pd.DataFrame(products, columns=['product_id', 'name', 'category', 'price'])
+        df_products = pd.DataFrame(products, columns=['product_id','store_id', 'name', 'category', 'price'])
         
         # Merge DataFrames
         df_merged = pd.merge(df_transaction_details, df_products, on='product_id')
@@ -219,29 +219,30 @@ def get_analytics(
 def close_store(background_tasks: BackgroundTasks, store_id: int = Form(...)):
     try:
         global transaction_simulation_tasks
-        
+
         if store_id in transaction_simulation_tasks:
             # Stop the ongoing transaction simulation task
             transaction_simulation_tasks.pop(store_id)
-        
+
         connection = create_connection(DATABASE)
         cursor = connection.cursor()
-        
-        cursor.execute("SELECT * FROM Transactions WHERE store_id = ?", (store_id,))
+
+        current_date = datetime.datetime.now().strftime("%Y-%m-%d")
+        cursor.execute("SELECT * FROM Transactions WHERE store_id = ? AND DATE(timestamp) = ?", (store_id, current_date))
         transactions = cursor.fetchall()
-        
+
         df_transactions = pd.DataFrame(transactions, columns=['transaction_id', 'store_id', 'total_amount', 'timestamp'])
         df_transactions['timestamp'] = pd.to_datetime(df_transactions['timestamp'], format='%Y-%m-%d %H:%M')
-        
+
         total_sales = df_transactions['total_amount'].sum()
-        
+
         cursor.execute("SELECT forecast_amount FROM Forecasts WHERE store_id = ?", (store_id,))
         forecast_amount = cursor.fetchone()[0]
-        
+
         target_achieved = bool(total_sales >= forecast_amount)
-        
+
         connection.close()
-        
+
         return {
             "message": "Store closed successfully",
             "total_sales": float(total_sales),
