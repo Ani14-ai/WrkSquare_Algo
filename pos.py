@@ -17,7 +17,7 @@ import threading
 from typing import Annotated
 from fastapi.responses import FileResponse, JSONResponse
 
-app = FastAPI( title='Retail Store Point-od-sales Analytics',
+app = FastAPI( title='Retail Store Point-Of-Sales Analytics',
     description='Store APIs')
 
 DATABASE = 'coffee_shop.db'
