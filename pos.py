@@ -17,7 +17,9 @@ import threading
 from typing import Annotated
 from fastapi.responses import FileResponse, JSONResponse
 
-app = FastAPI()
+app = FastAPI( title='Retail Store Point-od-sales Analytics',
+    description='Store APIs')
+
 DATABASE = 'coffee_shop.db'
 OPENAI_API_KEY=os.getenv("OPENAI_API_KEY")
 os.environ["openai_api_key"] = OPENAI_API_KEY
@@ -39,6 +41,7 @@ class TransactionDetail(BaseModel):
 
 class PromptRequest(BaseModel):
     prompt: str
+    
 
 
 def get_forecast_amount():
@@ -58,7 +61,7 @@ def create_connection(db_file):
 transaction_simulation_tasks = {}  
 db_lock = threading.Lock()
 
-@app.post("/e6a9fbd7-f487-4a47-bfa4-1d207b4d5686", summary="Open Store")
+@app.post("/e6a9fbd7-f487-4a47-bfa4-1d207b4d5686", summary="Open Store" , tags=["My Store"] )
 def open_store(background_tasks: BackgroundTasks, store_id: int = Form(...)):
     try:
         forecast_amount = get_forecast_amount()
@@ -124,7 +127,7 @@ def start_transaction_simulation(store_id: int):
             simulate_transaction(store_id)
         time.sleep(random.uniform(30,60)) 
         
-@app.get("/f91e0ab8-4a7e-4e6f-95c2-f3f67c5a62c8", summary="Realtime Transactions")
+@app.get("/f91e0ab8-4a7e-4e6f-95c2-f3f67c5a62c8", summary="Realtime Transactions" , tags=["My Store"])
 def get_realtime_transactions(store_id: int):
     try:
         connection = create_connection(DATABASE)
@@ -139,7 +142,40 @@ def get_realtime_transactions(store_id: int):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
         
-@app.post("/d3b8f374-89b5-4db5-8d98-1c29e2a1e9e5", summary="Augmented Analytics")
+def generate_combined_graph(store_id: int, transactions: list):
+    # Create graph (sales progress)
+    df_transactions = pd.DataFrame(transactions, columns=['transaction_id', 'store_id', 'total_amount', 'timestamp'])
+    df_transactions['timestamp'] = pd.to_datetime(df_transactions['timestamp'], format="%Y-%m-%d %H:%M")
+    df_transactions.set_index('timestamp', inplace=True)
+    
+    # Resample to daily sales
+    daily_sales = df_transactions['total_amount'].resample('D').sum()
+    
+    # Calculate progress towards 1000 AED
+    current_date = datetime.datetime.now().strftime("%Y-%m-%d")
+    progress_target = 1000
+    progress_data = pd.Series([0, progress_target], index=pd.date_range(start=current_date, periods=2, freq='D'))
+
+    # Plotting
+    plt.figure(figsize=(10, 6))
+    sns.lineplot(data=daily_sales, marker='o', color='b', label='Daily Sales')
+    plt.plot(progress_data.index, [progress_target] * len(progress_data.index), linestyle='--', color='r', label=f'Progress towards {progress_target} AED')
+    
+    plt.title(f'Daily Sales Progress for Store {store_id} up to {current_date}')
+    plt.xlabel('Date')
+    plt.ylabel('Total Sales (AED)')
+    plt.xticks(rotation=45)
+    plt.grid(True)
+    plt.legend()
+
+    # Save graph
+    combined_graph_path = f'combined_chart_{store_id}.png'
+    plt.savefig(combined_graph_path)
+    plt.close()
+    
+    return combined_graph_path
+        
+@app.post("/d3b8f374-89b5-4db5-8d98-1c29e2a1e9e5", summary="Augmented Analytics" , tags=["My Store"])
 def get_analytics(
     store_id: int,
     prompt_request: Annotated[
@@ -196,26 +232,49 @@ def get_analytics(
         cursor.execute("SELECT * FROM Products WHERE store_id = ?", (store_id,))
         products = cursor.fetchall()
         
-        df_products = pd.DataFrame(products, columns=['product_id','store_id', 'name', 'category', 'price'])
+        df_products = pd.DataFrame(products, columns=['product_id', 'store_id', 'name', 'category', 'price'])
         
         # Merge DataFrames
         df_merged = pd.merge(df_transaction_details, df_products, on='product_id')
-        df_merged = pd.merge(df_merged, df_transactions, on='transaction_id')        
+        df_merged = pd.merge(df_merged, df_transactions, on='transaction_id')
+        
+        # Create SmartDatalake
         lake = SmartDatalake([df_merged], config={"llm": llm})
-        response = lake.chat(prompt_request.prompt + "All prices should be in AED")
-        graph_path = "/home/waysahead/sites/WrkSquare_Algo/exports/charts/temp_chart.png"
-        if all(ord(char) < 128 for char in response):
-            headers = {"AI-response": response}
-        else:
-            headers = {}
-        if os.path.exists(graph_path):
-            return FileResponse(graph_path, media_type="image/png", headers=headers)
-        else:
-            return JSONResponse(content={"AI-response": response})
+        response = lake.chat(prompt_request.prompt + " All prices should be in AED")
+        
+        # Generate combined graph with subplots
+        combined_graph_path = generate_combined_graph(store_id, transactions)
+        
+        # Path to the stored graph
+        stored_graph_path = "/home/waysahead/sites/WrkSquare_Algo/exports/charts/temp_chart.png"
+        
+        # Create a new figure with subplots
+        fig, axes = plt.subplots(1, 2, figsize=(18, 8))
+        
+        # Load and plot the progress graph
+        progress_img = plt.imread(combined_graph_path)
+        axes[0].imshow(progress_img)
+        axes[0].axis('off')
+        axes[0].set_title('Progress Graph towards 1000 AED')
+        
+        # Load and plot the stored graph
+        stored_img = plt.imread(stored_graph_path)
+        axes[1].imshow(stored_img)
+        axes[1].axis('off')
+        axes[1].set_title('AI Graph')
+        
+        # Save combined graph
+        combined_graph_with_stored_path = f'combined_with_stored_chart_{store_id}.png'
+        plt.savefig(combined_graph_with_stored_path)
+        plt.tight_layout()
+        plt.close()
+        
+        headers = {"AI-response": response}
+        return FileResponse(combined_graph_with_stored_path, media_type='image/png', headers=headers)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
         
-@app.post("/a9174a9f-3e16-47a4-9bce-8c4e04c6895b", summary="Close Store")
+@app.post("/a9174a9f-3e16-47a4-9bce-8c4e04c6895b", summary="Close Store" , tags=["My Store"])
 def close_store(background_tasks: BackgroundTasks, store_id: int = Form(...)):
     try:
         global transaction_simulation_tasks
