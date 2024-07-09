@@ -175,7 +175,7 @@ def get_analytics(
                     "summary": "Box Plot",
                     "description": "Display a box plot of daily sales for each day in a specific month to analyze sales distribution and identify outliers.",
                     "value": {
-                        "prompt": "Display a box plot of daily sales for each day in a specific month to analyze sales distribution and identify outliers."
+                        "prompt": "Display a box plot of daily sales for each day in the month of June"
                     },
                 },
             },
