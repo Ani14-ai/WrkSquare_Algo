@@ -152,30 +152,30 @@ def get_analytics(
             openapi_examples={
                 "line_plot": {
                     "summary": "Line Plot",
-                    "description": "Show a line plot of daily sales trends with time on the x-axis and total sales on the y-axis. Use vibrant colors and add a legend.",
+                    "description": "Show a line chart illustrating the hourly sales progress of the latest date towards a target of 8000 AED. Use vibrant colors and add a legend.",
                     "value": {
-                        "prompt": "Show a line plot of daily sales trends with time on the x-axis and total sales on the y-axis. Use vibrant colors and add a legend."
+                        "prompt": "Show a line chart illustrating the hourly sales progress of the latest date towards a target of 8000 AED. Use vibrant colors and add a legend."
                     },
                 },
                 "pie_chart": {
                     "summary": "Pie Chart",
                     "description": "Create a pie chart showing the distribution of sales among different product categories. Use a variety of colors for each category.",
                     "value": {
-                        "prompt": "Create a pie chart showing the distribution of sales among different product categories. Use a variety of colors for each category."
+                        "prompt": "Create a pie chart depicting the distribution of sales across different product categories. Use a variety of colors for each category."
                     },
                 },
                 "heatmap": {
                     "summary": "Heatmap",
                     "description": "Generate a heatmap to show the sales amount for each product over time. Use a gradient color scheme to represent sales volume.",
                     "value": {
-                        "prompt": "Generate a heatmap to show the sales amount for each product over time. Use a gradient color scheme to represent sales volume."
+                        "prompt": "Generate a heatmap showing the sales amount for each product at different hours of the day. Use a gradient color scheme to represent sales volume."
                     },
                 },
-                "bar_chart": {
-                    "summary": "Bar Chart",
-                    "description": "Display a bar chart of the top 5 selling products with product names on the x-axis and sales amount on the y-axis. Use different colors for each bar.",
+                "bax_chart": {
+                    "summary": "Box Plot",
+                    "description": "Display a box plot of daily sales for each day in a specific month to analyze sales distribution and identify outliers.",
                     "value": {
-                        "prompt": "Display a bar chart of the top 5 selling products with product names on the x-axis and sales amount on the y-axis. Use different colors for each bar."
+                        "prompt": "Display a box plot of daily sales for each day in a specific month to analyze sales distribution and identify outliers."
                     },
                 },
             },
