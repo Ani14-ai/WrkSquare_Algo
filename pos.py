@@ -46,7 +46,7 @@ class PromptRequest(BaseModel):
 
 
 def get_forecast_amount():
-    return 1000 
+    return 3000 
 
 def get_cash_register_amount():
     return round(random.uniform(50, 200), 2)  
