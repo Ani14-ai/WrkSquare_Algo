@@ -144,7 +144,7 @@ def get_realtime_transactions(store_id: int):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.get("/forecast", summary="Time Series Forecasting" , tags=["My Store"])
+@app.get("/forecast", summary="Time Series Forecasting")
 def get_forecast(store_id: int):
     try:
         connection = create_connection(DATABASE)
@@ -156,18 +156,36 @@ def get_forecast(store_id: int):
         df_transactions = pd.DataFrame(transactions, columns=['transaction_id', 'store_id', 'total_amount', 'timestamp'])
         df_transactions['timestamp'] = pd.to_datetime(df_transactions['timestamp'], format="%Y-%m-%d %H:%M")
 
-        # Create SmartDatalake
-        lake = SmartDatalake([df_transactions], config={"llm": llm})
-
-        # Instead of using AI to generate code, we directly use ARIMA for forecasting
+        # Set the timestamp as index
         df_transactions.set_index('timestamp', inplace=True)
+
+        # Fit ARIMA model
         model = ARIMA(df_transactions['total_amount'], order=(5, 1, 0))
         model_fit = model.fit()
-        forecast = model_fit.forecast(steps=90)[0]  # Get the forecast for the next 3 months (90 days)
-        forecast_date = df_transactions.index[-1] + pd.Timedelta(days=90)
 
-        # Return the forecast as a JSON response
-        return {"forecast": forecast, "date": forecast_date.strftime("%Y-%m-%d")}
+        # Forecast for the next 3 months (approximately 90 days)
+        forecast_steps = 90
+        forecast = model_fit.forecast(steps=forecast_steps)
+        forecast_dates = pd.date_range(df_transactions.index[-1], periods=forecast_steps + 1, closed='right')
+
+        # Create a DataFrame for the forecasted values
+        df_forecast = pd.DataFrame({'timestamp': forecast_dates, 'forecast': forecast})
+
+        # Plot the actual and forecasted values
+        forecast_graph_path = "/home/waysahead/sites/WrkSquare_Algo/exports/charts/temp_chart.png"
+        plt.figure(figsize=(10, 6))
+        sns.lineplot(data=df_transactions, x=df_transactions.index, y='total_amount', marker='o', color='b', label='Total Sales')
+        sns.lineplot(data=df_forecast, x='timestamp', y='forecast', marker='o', color='r', label='Forecast')
+        plt.title('Time Series Forecast for Total Sales')
+        plt.xlabel('Date')
+        plt.ylabel('Total Sales (AED)')
+        plt.xticks(rotation=45)
+        plt.grid(True)
+        plt.legend()
+        plt.savefig(forecast_graph_path)
+        plt.close()
+
+        return FileResponse(forecast_graph_path, media_type="image/png")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
         
@@ -201,7 +219,7 @@ def get_market_basket_analysis(store_id: int):
         lake = SmartDatalake([df_merged], config={"llm": llm})
         response = lake.chat("Provide a market basket analysis with a focus on products and their quantities to reach a sales target of 3000 AED.")
 
-        mba_graph_path = r"C:\Users\chatt\Documents\POS-coffee\exports\charts\temp_chart.png"
+        mba_graph_path = "/home/waysahead/sites/WrkSquare_Algo/exports/charts/temp_chart.png"
         plt.figure(figsize=(10, 6))
         sns.barplot(data=df_merged, x="name", y="quantity", hue="category")
         plt.title('Market Basket Analysis')
