@@ -144,7 +144,7 @@ def get_realtime_transactions(store_id: int):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.get("/e2e2b6a2-1997-4f00-80f1-82165499ed38", summary="Time Series Forecasting")
+@app.get("/e2e2b6a2-1997-4f00-80f1-82165499ed38", summary="Time Series Forecasting" ,  tags=["My Store"] )
 def get_forecast(store_id: int):
     try:
         connection = create_connection(DATABASE)
