@@ -239,6 +239,13 @@ def get_analytics(
         PromptRequest,
         Body(
             openapi_examples={
+                 "Store_summary":{
+                    "summary":"Store Summary",
+                    "description":"Summarizes the KPIs of the Store",
+                    "value":{
+                        "prompt":"Generate an augmented analytics summary for the month, incorporating the following KPIs: total sales breakdown by product category, total transactions, daily average transaction value, best-selling products by revenue, product category performance comparison, sales forecast vs. actual revenue with variances, cash register summary (total inflow and outflow), peak sales hours, and store performance comparison. Use appropriate charts, graphs, and tables to present the data clearly, with annotations and insights highlighting significant trends and observations. Use subplots to display all 9 KPIs"
+                    },
+                },
                 "line_plot": {
                     "summary": "Line Plot",
                     "description": """Generate a line plot showing the monthly sales revenue for the past four months, highlighting significant peaks and dips, and annotate major events or promotions that could have impacted sales.
