@@ -16,6 +16,7 @@ import base64
 import threading
 from typing import Annotated
 from fastapi.responses import FileResponse, JSONResponse
+from statsmodels.tsa.arima.model import ARIMA
 
 app = FastAPI( title='Retail Store Point-Of-Sales Analytics',
     description='Store APIs')
@@ -141,6 +142,81 @@ def get_realtime_transactions(store_id: int):
         return [{"transaction_id": transaction[0], "store_id": transaction[1], "total_amount": transaction[2], "timestamp": transaction[3]} for transaction in transactions]
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/forecast", summary="Time Series Forecasting" , tags=["My Store"])
+def get_forecast(store_id: int):
+    try:
+        connection = create_connection(DATABASE)
+        cursor = connection.cursor()
+
+        cursor.execute("SELECT * FROM Transactions WHERE store_id = ?", (store_id,))
+        transactions = cursor.fetchall()
+
+        df_transactions = pd.DataFrame(transactions, columns=['transaction_id', 'store_id', 'total_amount', 'timestamp'])
+        df_transactions['timestamp'] = pd.to_datetime(df_transactions['timestamp'], format="%Y-%m-%d %H:%M")
+
+        # Create SmartDatalake
+        lake = SmartDatalake([df_transactions], config={"llm": llm})
+
+        # Instead of using AI to generate code, we directly use ARIMA for forecasting
+        df_transactions.set_index('timestamp', inplace=True)
+        model = ARIMA(df_transactions['total_amount'], order=(5, 1, 0))
+        model_fit = model.fit()
+        forecast = model_fit.forecast(steps=90)[0]  # Get the forecast for the next 3 months (90 days)
+        forecast_date = df_transactions.index[-1] + pd.Timedelta(days=90)
+
+        # Return the forecast as a JSON response
+        return {"forecast": forecast, "date": forecast_date.strftime("%Y-%m-%d")}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+        
+@app.get("/mba", summary="Market Basket Analysis" , tags=["My Store"])
+def get_market_basket_analysis(store_id: int):
+    try:
+        connection = create_connection(DATABASE)
+        cursor = connection.cursor()
+
+        cursor.execute("SELECT * FROM Transactions WHERE store_id = ?", (store_id,))
+        transactions = cursor.fetchall()
+
+        df_transactions = pd.DataFrame(transactions, columns=['transaction_id', 'store_id', 'total_amount', 'timestamp'])
+        df_transactions['timestamp'] = pd.to_datetime(df_transactions['timestamp'], format="%Y-%m-%d %H:%M")
+
+        cursor.execute("SELECT * FROM TransactionDetails")
+        transaction_details = cursor.fetchall()
+
+        df_transaction_details = pd.DataFrame(transaction_details, columns=['transaction_detail_id', 'transaction_id', 'product_id', 'quantity', 'price'])
+
+        cursor.execute("SELECT * FROM Products WHERE store_id = ?", (store_id,))
+        products = cursor.fetchall()
+
+        df_products = pd.DataFrame(products, columns=['product_id', 'store_id', 'name', 'category', 'price'])
+
+        # Merge DataFrames
+        df_merged = pd.merge(df_transaction_details, df_products, on='product_id')
+        df_merged = pd.merge(df_merged, df_transactions, on='transaction_id')
+
+        # Create SmartDatalake
+        lake = SmartDatalake([df_merged], config={"llm": llm})
+        response = lake.chat("Provide a market basket analysis with a focus on products and their quantities to reach a sales target of 3000 AED.")
+
+        mba_graph_path = r"C:\Users\chatt\Documents\POS-coffee\exports\charts\temp_chart.png"
+        plt.figure(figsize=(10, 6))
+        sns.barplot(data=df_merged, x="name", y="quantity", hue="category")
+        plt.title('Market Basket Analysis')
+        plt.xlabel('Product')
+        plt.ylabel('Quantity')
+        plt.xticks(rotation=45)
+        plt.grid(True)
+        plt.legend()
+        plt.savefig(mba_graph_path)
+        plt.close()
+
+        return FileResponse(mba_graph_path, media_type="image/png")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
         
         
 @app.post("/d3b8f374-89b5-4db5-8d98-1c29e2a1e9e5", summary="Augmented Analytics" , tags=["My Store"])
@@ -152,28 +228,40 @@ def get_analytics(
             openapi_examples={
                 "line_plot": {
                     "summary": "Line Plot",
-                    "description": "Show a line chart illustrating the hourly sales progress of the latest date towards a target of 8000 AED. Use vibrant colors and add a legend.",
+                    "description": """Generate a line plot showing the monthly sales revenue for the past four months, highlighting significant peaks and dips, and annotate major events or promotions that could have impacted sales.
+                    
+Generate a line plot showing the trend of customer footfall over the past year. Highlight any significant peaks or troughs and correlate them with marketing campaigns or seasonal events.
+
+Generate a line plot showing the monthly sales trend for the retail store over the past 5 months. Highlight any significant increases or decreases, and correlate these with special events and festivals in the UAE, such as Ramadan, Eid, and National Day.""",
                     "value": {
-                        "prompt": "Show a line chart illustrating the hourly sales progress of the latest date towards a target of 8000 AED. Use vibrant colors and add a legend."
+                        "prompt": "Show a line plot of daily sales trends with time on the x-axis and total sales on the y-axis. Use vibrant colors and add a legend."
                     },
                 },
                 "pie_chart": {
                     "summary": "Pie Chart",
-                    "description": "Create a pie chart showing the distribution of sales among different product categories. Use a variety of colors for each category.",
+                    "description": """ Create a pie chart showing the distribution of sales among different product categories for the latest month. Use a diverse palette of colors for each category, add labels with both the category names and their respective sales percentages, and include a legend for clarity.
+
+Create an interactive pie chart showing the proportion of sales across various regions in the UAE for the last quarter. Use a range of colors to represent different regions, display percentage labels on each slice, and include a legend with detailed region names.""",
                     "value": {
-                        "prompt": "Create a pie chart depicting the distribution of sales across different product categories. Use a variety of colors for each category."
+                        "prompt": "Create a pie chart showing the distribution of sales among different product categories. Use a variety of colors for each category."
                     },
                 },
                 "heatmap": {
                     "summary": "Heatmap",
-                    "description": "Generate a heatmap to show the sales amount for each product over time. Use a gradient color scheme to represent sales volume.",
+                    "description": """Produce a heatmap of product popularity based on customer ratings and purchase frequency, highlighting products with high ratings and frequent purchases. Use product names on the y axis
+
+Produce a heatmap displaying hourly sales data for each product on the latest date. Use a spectrum color scheme to indicate sales volume. Highlight the hours with peak sales with a distinct color and include product names on the y-axis 
+
+Using today's sales data, perform a market basket analysis and generate a heatmap using Seaborn to show the most frequently bought together product combinations. Highlight the combinations that can help achieve a target sales of 3000 AED based on the latest purchasing patterns""",
                     "value": {
-                        "prompt": "Generate a heatmap showing the sales amount for each product at different hours of the day. Use a gradient color scheme to represent sales volume."
+                        "prompt": "Generate a heatmap to show the sales amount for each product over time. Use a gradient color scheme to represent sales volume."
                     },
                 },
-                "bax_chart": {
+                 "box_chart": {
                     "summary": "Box Plot",
-                    "description": "Display a box plot of daily sales for each day in a specific month to analyze sales distribution and identify outliers.",
+                    "description": """ Create a visually appealing box plot to display the range of daily sales for a selected month. Each box should represent a different day of the month. Use a vibrant and cohesive color scheme to enhance visual appeal. Clearly highlight the interquartile range (IQR) and any outliers to provide insightful analysis. Use a legend
+
+Create a box plot to showcase the distribution of daily sales over the past quarter. Use varied colors for each month and include a legend to clearly indicate which color corresponds to each month. Highlight the median sales value with a bold line for emphasis.""",
                     "value": {
                         "prompt": "Display a box plot of daily sales for each day in the month of June"
                     },
