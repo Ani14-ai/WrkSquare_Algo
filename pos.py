@@ -441,7 +441,7 @@ def get_analytics(
                     
 Generate a line plot showing the trend of customer footfall over the past year. Highlight any significant peaks or troughs and correlate them with marketing campaigns or seasonal events.
 
-Generate a line plot showing the monthly sales trend for the retail store over the past 5 months. Highlight any significant increases or decreases, and correlate these with special events and festivals in the UAE, such as Ramadan, Eid, and National Day.""",
+Generate a line plot showing the monthly sales trend for the retail store over the past 8 months. Highlight any significant increases or decreases, and correlate these with special events and festivals in the UAE, such as Ramadan, Eid, and National Day.""",
                     "value": {
                         "prompt": "Show a line plot of daily sales trends with time on the x-axis and total sales on the y-axis. Use vibrant colors and add a legend."
                     },
@@ -463,7 +463,7 @@ Produce a heatmap displaying hourly sales data for each product on the latest da
 
 Using today's sales data, perform a market basket analysis and generate a heatmap using Seaborn to show the most frequently bought together product combinations. Highlight the combinations that can help achieve a target sales of 3000 AED based on the latest purchasing patterns""",
                     "value": {
-                        "prompt": "Generate a heatmap to show the sales amount for each product over time. Use a gradient color scheme to represent sales volume."
+                        "prompt": "Generate a heatmap to show the sales amount of each product in the past month. Use a gradient color scheme to represent sales volume."
                     },
                 },
                  "box_chart": {
