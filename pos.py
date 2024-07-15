@@ -349,7 +349,7 @@ def get_store_data(store_id: int):
     return df_transactions, df_transaction_details, df_products
 
 
-@app.post("/53b4161c-8f56-4571-a556-4a9f5813196c", response_model= Store Summary,  tags=["My Store"])
+@app.post("/53b4161c-8f56-4571-a556-4a9f5813196c", response_model=StoreSummary ,summary = "Summarize Store Sales" ,  tags=["My Store"])
 def summarize_store(store_id: int):
     df_transactions, df_transaction_details, df_products = get_store_data(store_id)
     
