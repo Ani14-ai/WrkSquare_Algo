@@ -379,8 +379,7 @@ def summarize_store(store_id: int):
     sales_today = round(df_transactions[df_transactions['timestamp'].dt.date == today]['total_amount'].sum(), 2)
     
     # Calculate WTD Sales (Week-to-Date) and round to two decimal places
-    start_of_week = today - datetime.timedelta(days=7s)
-    print(datetime.timedelta(days=today.weekday()))
+    start_of_week = today - datetime.timedelta(days=7)
     wtd_sales = round(df_transactions[df_transactions['timestamp'].dt.date >= start_of_week]['total_amount'].sum(), 2)
     
     # Calculate MTD Sales (Month-to-Date) and round to two decimal places
