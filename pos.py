@@ -16,7 +16,8 @@ import base64
 import threading
 from typing import Annotated
 from fastapi.responses import FileResponse, JSONResponse
-from statsmodels.tsa.arima.model import ARIMA
+from itertools import combinations
+from collections import defaultdict
 
 app = FastAPI( title='Retail Store Point-Of-Sales Analytics',
     description='Store APIs')
@@ -144,45 +145,6 @@ def get_realtime_transactions(store_id: int):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.get("/e2e2b6a2-1997-4f00-80f1-82165499ed38", summary="Time Series Forecasting" ,  tags=["My Store"] )
-def get_forecast(store_id: int):
-    try:
-        connection = create_connection(DATABASE)
-        cursor = connection.cursor()
-
-        cursor.execute("SELECT * FROM Transactions WHERE store_id = ?", (store_id,))
-        transactions = cursor.fetchall()
-
-        df_transactions = pd.DataFrame(transactions, columns=['transaction_id', 'store_id', 'total_amount', 'timestamp'])
-        df_transactions['timestamp'] = pd.to_datetime(df_transactions['timestamp'], format="%Y-%m-%d %H:%M")
-
-        # Create SmartDatalake
-        lake = SmartDatalake([df_transactions], config={"llm": llm})
-
-        # Instead of using AI to generate code, we directly use ARIMA for forecasting
-        df_transactions.set_index('timestamp', inplace=True)
-        model = ARIMA(df_transactions['total_amount'], order=(5, 1, 0))
-        model_fit = model.fit()
-        forecast = model_fit.forecast(steps=90)
-        forecast_dates = pd.date_range(df_transactions.index[-1], periods=90)
-
-        # Plot forecast
-        forecast_graph_path = r"C:\Users\chatt\Documents\POS-coffee\exports\charts\temp_chart.png"
-        plt.figure(figsize=(10, 6))
-        sns.lineplot(data=df_transactions, x=df_transactions.index, y="total_amount", marker='o', color='b', label='Total Sales')
-        sns.lineplot(x=forecast_dates, y=forecast, marker='o', color='r', label='Forecast')
-        plt.title('Time Series Forecast for Total Sales')
-        plt.xlabel('Date')
-        plt.ylabel('Total Sales (AED)')
-        plt.xticks(rotation=45)
-        plt.grid(True)
-        plt.legend()
-        plt.savefig(forecast_graph_path)
-        plt.close()
-
-        return FileResponse(forecast_graph_path, media_type="image/png")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
         
 @app.get("/631ae94b-13a6-485e-a49d-79df59feb687", summary="Market Basket Analysis" , tags=["My Store"])
 def get_market_basket_analysis(store_id: int):
@@ -210,27 +172,262 @@ def get_market_basket_analysis(store_id: int):
         df_merged = pd.merge(df_transaction_details, df_products, on='product_id')
         df_merged = pd.merge(df_merged, df_transactions, on='transaction_id')
 
-        # Create SmartDatalake
-        lake = SmartDatalake([df_merged], config={"llm": llm})
-        response = lake.chat("Provide a market basket analysis with a focus on products and their quantities to reach a sales target of 3000 AED.")
+        # Create a list of transactions with the items purchased
+        transaction_items = df_merged.groupby('transaction_id')['name'].apply(list).tolist()
 
-        mba_graph_path = "/home/waysahead/sites/WrkSquare_Algo/exports/charts/temp_chart.png"
-        plt.figure(figsize=(10, 6))
-        sns.barplot(data=df_merged, x="name", y="quantity", hue="category")
-        plt.title('Market Basket Analysis')
-        plt.xlabel('Product')
-        plt.ylabel('Quantity')
-        plt.xticks(rotation=45)
-        plt.grid(True)
-        plt.legend()
-        plt.savefig(mba_graph_path)
+        # Generate all possible combinations of two items per transaction
+        combinations_list = []
+        for items in transaction_items:
+            combinations_list.extend(combinations(items, 2))
+
+        # Calculate support, confidence, and lift
+        item_count = defaultdict(int)
+        combo_count = defaultdict(int)
+        for items in transaction_items:
+            for item in items:
+                item_count[item] += 1
+            for combo in combinations(items, 2):
+                combo_count[combo] += 1
+
+        total_transactions = len(transaction_items)
+        mba_data = []
+        for combo, count in combo_count.items():
+            item1, item2 = combo
+            support = count / total_transactions
+            confidence = count / item_count[item1]
+            lift = confidence / (item_count[item2] / total_transactions)
+            mba_data.append({
+                'item1': item1,
+                'item2': item2,
+                'support': support,
+                'confidence': confidence,
+                'lift': lift
+            })
+
+        df_mba = pd.DataFrame(mba_data)
+
+        plt.figure(figsize=(14, 10))
+        sizes = 1000 * df_mba['lift']
+        scatter = plt.scatter(df_mba['item1'], df_mba['item2'], s=sizes, alpha=0.6, c=df_mba['lift'], cmap='viridis')
+
+        # Add color bar
+        cbar = plt.colorbar(scatter)
+        cbar.set_label('Lift', rotation=270, labelpad=15)
+
+        # Title and labels
+        plt.title('Basket Analysis Map')
+        plt.xlabel('Item 1')
+        plt.ylabel('Item 2')
+
+        # Reduce number of labels to avoid overlapping
+        labels = df_mba.apply(lambda row: f"{row['item1']} - {row['item2']}", axis=1)
+        for i, label in enumerate(labels):
+            if df_mba['lift'][i] > df_mba['lift'].quantile(0.75):  # Only label the top 25% lifts
+                plt.text(df_mba['item1'][i], df_mba['item2'][i], label, fontsize=8, ha='right', va='bottom',
+                        bbox=dict(facecolor='white', alpha=0.5))
+
+        plt.xticks(rotation=45, ha='right')
+        plt.yticks(rotation=45, va='top')
+        plt.tight_layout()
+        mba_heatmap_path = 'mba_heatmap.png'
+        plt.savefig(mba_heatmap_path)
         plt.close()
-
-        return FileResponse(mba_graph_path, media_type="image/png")
+        # Prepare data for the table
+        table_data = []
+        for _, row in df_mba.iterrows():
+            table_data.append({
+                'Basket': f"{row['item1']} - {row['item2']}",
+                'Sum of Support Basket': f"{row['support']*100:.2f}%",
+                'Sum of Confidence of Prod1': f"{row['confidence']*100:.2f}%",
+                'Sum of Confidence of Prod2': f"{row['confidence']*100:.2f}%",
+                'Sum of Lift': f"{row['lift']:.2f}"
+            })
+        return FileResponse(mba_heatmap_path, media_type='image/png')
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-        
+@app.get("/2360728c-406d-4b53-9e4f-416671f521a5", summary="MBA-TABLE-JSON" , tags=["My Store"])
+def get_market_basket_analysis(store_id: int):
+    try:
+        connection = create_connection(DATABASE)
+        cursor = connection.cursor()
+
+        cursor.execute("SELECT * FROM Transactions WHERE store_id = ?", (store_id,))
+        transactions = cursor.fetchall()
+
+        df_transactions = pd.DataFrame(transactions, columns=['transaction_id', 'store_id', 'total_amount', 'timestamp'])
+        df_transactions['timestamp'] = pd.to_datetime(df_transactions['timestamp'], format="%Y-%m-%d %H:%M")
+
+        cursor.execute("SELECT * FROM TransactionDetails")
+        transaction_details = cursor.fetchall()
+
+        df_transaction_details = pd.DataFrame(transaction_details, columns=['transaction_detail_id', 'transaction_id', 'product_id', 'quantity', 'price'])
+
+        cursor.execute("SELECT * FROM Products WHERE store_id = ?", (store_id,))
+        products = cursor.fetchall()
+
+        df_products = pd.DataFrame(products, columns=['product_id', 'store_id', 'name', 'category', 'price'])
+
+        # Merge DataFrames
+        df_merged = pd.merge(df_transaction_details, df_products, on='product_id')
+        df_merged = pd.merge(df_merged, df_transactions, on='transaction_id')
+
+        # Create a list of transactions with the items purchased
+        transaction_items = df_merged.groupby('transaction_id')['name'].apply(list).tolist()
+
+        # Generate all possible combinations of two items per transaction
+        combinations_list = []
+        for items in transaction_items:
+            combinations_list.extend(combinations(items, 2))
+
+        # Calculate support, confidence, and lift
+        item_count = defaultdict(int)
+        combo_count = defaultdict(int)
+        for items in transaction_items:
+            for item in items:
+                item_count[item] += 1
+            for combo in combinations(items, 2):
+                combo_count[combo] += 1
+
+        total_transactions = len(transaction_items)
+        mba_data = []
+        for combo, count in combo_count.items():
+            item1, item2 = combo
+            support = count / total_transactions
+            confidence = count / item_count[item1]
+            lift = confidence / (item_count[item2] / total_transactions)
+            mba_data.append({
+                'item1': item1,
+                'item2': item2,
+                'support': support,
+                'confidence': confidence,
+                'lift': lift
+            })
+
+        df_mba = pd.DataFrame(mba_data)
+        # Prepare data for the table
+        table_data = []
+        for _, row in df_mba.iterrows():
+            table_data.append({
+                'Basket': f"{row['item1']} - {row['item2']}",
+                'Sum of Support Basket': f"{row['support']*100:.2f}%",
+                'Sum of Confidence of Prod1': f"{row['confidence']*100:.2f}%",
+                'Sum of Confidence of Prod2': f"{row['confidence']*100:.2f}%",
+                'Sum of Lift': f"{row['lift']:.2f}"
+            })
+        return JSONResponse(content=table_data)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+def get_db_connection():
+    conn = sqlite3.connect(DATABASE)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+class StoreSummary(BaseModel):
+    StoreID: int
+    LifetimeSales: float
+    AverageDailySales: float
+    ATV_AOV: float
+    AvgItemPrice: float
+    SalesToday: float
+    WTDSales: float
+    MTDSales: float
+    QTDSales: float
+    YTDSales: float
+    YoYGrowth: float
+    TopPerformingItems: List[dict]
+    BottomPerformingItems: List[dict]
+
+def get_store_data(store_id: int):
+    conn = get_db_connection()
+    df_transactions = pd.read_sql_query(f"SELECT * FROM Transactions WHERE store_id = {store_id}", conn)
+    df_transaction_details = pd.read_sql_query(f"SELECT * FROM TransactionDetails WHERE transaction_id IN (SELECT transaction_id FROM Transactions WHERE store_id = {store_id})", conn)
+    df_products = pd.read_sql_query(f"SELECT * FROM Products WHERE store_id = {store_id}", conn)
+    conn.close()
+    return df_transactions, df_transaction_details, df_products
+
+
+@app.post("/summarize_store", response_model=StoreSummary)
+def summarize_store(store_id: int):
+    df_transactions, df_transaction_details, df_products = get_store_data(store_id)
+    
+    if df_transactions.empty or df_transaction_details.empty or df_products.empty:
+        raise HTTPException(status_code=404, detail="Store data not found")
+
+    # Convert timestamps to datetime objects
+    df_transactions['timestamp'] = pd.to_datetime(df_transactions['timestamp'])
+
+    # Calculate Lifetime Sales and round to two decimal places
+    lifetime_sales = round(df_transactions['total_amount'].sum(), 2)
+    
+    # Calculate Average Daily Sales and round to two decimal places
+    total_days = (df_transactions['timestamp'].max().date() - df_transactions['timestamp'].min().date()).days + 1
+    average_daily_sales = round(lifetime_sales / total_days if total_days > 0 else 0, 2)
+
+    # Calculate ATV/AOV (Average Transaction Value) and round to two decimal places
+    total_transactions = df_transactions.shape[0]
+    atv_aov = round(lifetime_sales / total_transactions if total_transactions > 0 else 0, 2)
+    
+    # Calculate Average Item Price and round to two decimal places
+    total_items_sold = df_transaction_details['quantity'].sum()
+    avg_item_price = round(df_transaction_details['price'].mean() if total_items_sold > 0 else 0, 2)
+    
+    # Calculate Sales Today and round to two decimal places
+    today = datetime.datetime.now().date()
+    sales_today = round(df_transactions[df_transactions['timestamp'].dt.date == today]['total_amount'].sum(), 2)
+    
+    # Calculate WTD Sales (Week-to-Date) and round to two decimal places
+    start_of_week = today - datetime.timedelta(days=7s)
+    print(datetime.timedelta(days=today.weekday()))
+    wtd_sales = round(df_transactions[df_transactions['timestamp'].dt.date >= start_of_week]['total_amount'].sum(), 2)
+    
+    # Calculate MTD Sales (Month-to-Date) and round to two decimal places
+    start_of_month = today.replace(day=1)
+    mtd_sales = round(df_transactions[df_transactions['timestamp'].dt.date >= start_of_month]['total_amount'].sum(), 2)
+    
+    # Calculate QTD Sales (Quarter-to-Date) and round to two decimal places
+    quarter = (today.month - 1) // 3 + 1
+    start_of_quarter = datetime.datetime(today.year, 3 * (quarter - 1) + 1, 1).date()
+    qtd_sales = round(df_transactions[df_transactions['timestamp'].dt.date >= start_of_quarter]['total_amount'].sum(), 2)
+    
+    # Calculate YTD Sales (Year-to-Date) and round to two decimal places
+    start_of_year = today.replace(month=1, day=1)
+    ytd_sales = round(df_transactions[df_transactions['timestamp'].dt.date >= start_of_year]['total_amount'].sum(), 2)
+    
+    # Calculate YoY Growth (Year-over-Year) and round to two decimal places
+    last_year_start = start_of_year.replace(year=start_of_year.year - 1)
+    last_year_end = start_of_year - datetime.timedelta(days=1)
+    last_year_sales = df_transactions[(df_transactions['timestamp'].dt.date >= last_year_start) & (df_transactions['timestamp'].dt.date <= last_year_end)]['total_amount'].sum()
+    yoy_growth = round(((ytd_sales - last_year_sales) / last_year_sales) * 100 if last_year_sales > 0 else 0, 2)
+    
+    # Calculate Top Performing Items
+    top_performing_items = df_transaction_details.groupby('product_id')['quantity'].sum().nlargest(3).reset_index()
+    top_performing_items = top_performing_items.merge(df_products[['product_id', 'name']], on='product_id')
+    top_performing_items = top_performing_items[['name', 'quantity']].to_dict(orient='records')
+    
+    # Calculate Bottom Performing Items
+    bottom_performing_items = df_transaction_details.groupby('product_id')['quantity'].sum().nsmallest(3).reset_index()
+    bottom_performing_items = bottom_performing_items.merge(df_products[['product_id', 'name']], on='product_id')
+    bottom_performing_items = bottom_performing_items[['name', 'quantity']].to_dict(orient='records')
+    
+    return StoreSummary(
+        StoreID=store_id,
+        LifetimeSales=lifetime_sales,
+        AverageDailySales=average_daily_sales,
+        ATV_AOV=atv_aov,
+        AvgItemPrice=avg_item_price,
+        SalesToday=sales_today,
+        WTDSales=wtd_sales,
+        MTDSales=mtd_sales,
+        QTDSales=qtd_sales,
+        YTDSales=ytd_sales,
+        YoYGrowth=yoy_growth,
+        TopPerformingItems=top_performing_items,
+        BottomPerformingItems=bottom_performing_items
+    )
+      
         
 @app.post("/d3b8f374-89b5-4db5-8d98-1c29e2a1e9e5", summary="Augmented Analytics" , tags=["My Store"])
 def get_analytics(
@@ -239,13 +436,6 @@ def get_analytics(
         PromptRequest,
         Body(
             openapi_examples={
-                 "Store_summary":{
-                    "summary":"Store Summary",
-                    "description":"Summarizes the KPIs of the Store",
-                    "value":{
-                        "prompt":"Provide a monthly analytics summary with the following KPIs: total sales by product category, total transactions, daily average transaction value, best-selling products by revenue, product category performance, sales forecast vs. actual revenue, peak sales hours. Present these KPIs using charts and tables, organized as subplots, and include insights and annotations for significant trends. Use bar graph for total sales by product category and sales forecast vs actual revenue, line graph for total transactions and daily average transaction value and peak sales hours, heatmap for best selling products by revenue and product category performance. Show legends and grids in all graphs"
-                    },
-                },
                 "line_plot": {
                     "summary": "Line Plot",
                     "description": """Generate a line plot showing the monthly sales revenue for the past four months, highlighting significant peaks and dips, and annotate major events or promotions that could have impacted sales.
