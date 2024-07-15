@@ -14,7 +14,7 @@ from pandasai import Agent
 from io import BytesIO
 import base64
 import threading
-from typing import Annotated
+from typing import Annotated , List
 from fastapi.responses import FileResponse, JSONResponse
 from itertools import combinations
 from collections import defaultdict
